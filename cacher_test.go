@@ -49,14 +49,14 @@ func (s *CacherTestSuite) TestCacheCallsGetterOnlyOnce() {
 	}
 
 	// First call - should call the getter
-	result1, err1 := Cache(1, getter)
+	result1, err1 := Get(1, getter)
 	s.NoError(err1)
 	s.Equal("cached value", result1)
 	s.Equal(int32(1), s.callCount.Load(), "Getter should have been called once")
 
 	// Multiple subsequent calls - none should call the getter
 	for i := 0; i < 5; i++ {
-		result, err := Cache(1, getter)
+		result, err := Get(1, getter)
 		s.NoError(err)
 		s.Equal("cached value", result)
 		s.Equal(int32(1), s.callCount.Load(), "Getter should only have been called once")
@@ -71,23 +71,23 @@ func (s *CacherTestSuite) TestCacheCallsGetterForDifferentKeys() {
 	}
 
 	// Three different keys should call the getter 3 times
-	result1, err1 := Cache(1, getter)
+	result1, err1 := Get(1, getter)
 	s.NoError(err1)
 	s.Equal("value", result1)
 	s.Equal(int32(1), s.callCount.Load())
 
-	result2, err2 := Cache(2, getter)
+	result2, err2 := Get(2, getter)
 	s.NoError(err2)
 	s.Equal("value", result2)
 	s.Equal(int32(2), s.callCount.Load())
 
-	result3, err3 := Cache(3, getter)
+	result3, err3 := Get(3, getter)
 	s.NoError(err3)
 	s.Equal("value", result3)
 	s.Equal(int32(3), s.callCount.Load())
 
 	// Call again with key 1 - should NOT increment
-	result4, err4 := Cache(1, getter)
+	result4, err4 := Get(1, getter)
 	s.NoError(err4)
 	s.Equal("value", result4)
 	s.Equal(int32(3), s.callCount.Load(), "Key 1 was already cached")
@@ -108,23 +108,23 @@ func (s *CacherTestSuite) TestCacheDifferentTypesHaveSeparateCache() {
 	}
 
 	// First call for each type
-	strResult1, err1 := Cache(1, stringGetter)
+	strResult1, err1 := Get(1, stringGetter)
 	s.NoError(err1)
 	s.Equal("string value", strResult1)
 	s.Equal(int32(1), stringCalls.Load())
 
-	intResult1, err2 := Cache(1, intGetter)
+	intResult1, err2 := Get(1, intGetter)
 	s.NoError(err2)
 	s.Equal(42, intResult1)
 	s.Equal(int32(1), intCalls.Load())
 
 	// Second call - none should call the getter
-	strResult2, err3 := Cache(1, stringGetter)
+	strResult2, err3 := Get(1, stringGetter)
 	s.NoError(err3)
 	s.Equal("string value", strResult2)
 	s.Equal(int32(1), stringCalls.Load(), "String getter should NOT have been called again")
 
-	intResult2, err4 := Cache(1, intGetter)
+	intResult2, err4 := Get(1, intGetter)
 	s.NoError(err4)
 	s.Equal(42, intResult2)
 	s.Equal(int32(1), intCalls.Load(), "Int getter should NOT have been called again")
@@ -144,23 +144,23 @@ func (s *CacherTestSuite) TestCacheDoesNotCacheErrors() {
 	}
 
 	// First call - error
-	_, err1 := Cache(1, getter)
+	_, err1 := Get(1, getter)
 	s.Error(err1)
 	s.Equal(int32(1), s.callCount.Load())
 
 	// Second call - error (called again because error was not cached)
-	_, err2 := Cache(1, getter)
+	_, err2 := Get(1, getter)
 	s.Error(err2)
 	s.Equal(int32(2), s.callCount.Load(), "Getter should be called again because there was an error")
 
 	// Third call - success
-	result, err3 := Cache(1, getter)
+	result, err3 := Get(1, getter)
 	s.NoError(err3)
 	s.Equal("success", result)
 	s.Equal(int32(3), s.callCount.Load())
 
 	// Fourth call - should return from cache
-	result2, err4 := Cache(1, getter)
+	result2, err4 := Get(1, getter)
 	s.NoError(err4)
 	s.Equal("success", result2)
 	s.Equal(int32(3), s.callCount.Load(), "Getter should NOT be called because it's now cached")
@@ -168,7 +168,7 @@ func (s *CacherTestSuite) TestCacheDoesNotCacheErrors() {
 
 // TestCacheWithNilGetterFunc verifies that it returns an error when getterFunc is nil
 func (s *CacherTestSuite) TestCacheWithNilGetterFunc() {
-	result, err := Cache[int, string](1, nil)
+	result, err := Get[int, string](1, nil)
 	s.Error(err)
 	s.Equal("", result)
 	s.Contains(err.Error(), "getterFunc cannot be nil")
@@ -187,7 +187,7 @@ func (s *CacherTestSuite) TestCacheWithPointerTypes() {
 	}
 
 	// First call
-	user1, err1 := Cache(1, getter)
+	user1, err1 := Get(1, getter)
 	s.NoError(err1)
 	s.NotNil(user1)
 	s.Equal(1, user1.ID)
@@ -195,7 +195,7 @@ func (s *CacherTestSuite) TestCacheWithPointerTypes() {
 	s.Equal(int32(1), s.callCount.Load())
 
 	// Second call - should return from cache
-	user2, err2 := Cache(1, getter)
+	user2, err2 := Get(1, getter)
 	s.NoError(err2)
 	s.NotNil(user2)
 	s.Equal(1, user2.ID)
@@ -228,14 +228,14 @@ func (s *CacherTestSuite) TestCacheWithInterfaceTypes() {
 	}
 
 	// First call
-	reader1, err1 := Cache(1, getter)
+	reader1, err1 := Get(1, getter)
 	s.NoError(err1)
 	s.NotNil(reader1)
 	s.Equal("interface value", reader1.Read())
 	s.Equal(int32(1), s.callCount.Load())
 
 	// Second call - should return from cache
-	reader2, err2 := Cache(1, getter)
+	reader2, err2 := Get(1, getter)
 	s.NoError(err2)
 	s.NotNil(reader2)
 	s.Equal("interface value", reader2.Read())
@@ -255,14 +255,14 @@ func (s *CacherTestSuite) TestCacheWithPointerReturnType() {
 	}
 
 	// First call
-	product1, err1 := Cache(1, getter)
+	product1, err1 := Get(1, getter)
 	s.NoError(err1)
 	s.NotNil(product1)
 	s.Equal("ABC123", product1.SKU)
 	s.Equal(int32(1), s.callCount.Load())
 
 	// Second call
-	product2, err2 := Cache(1, getter)
+	product2, err2 := Get(1, getter)
 	s.NoError(err2)
 	s.NotNil(product2)
 	s.Equal("ABC123", product2.SKU)
@@ -281,13 +281,13 @@ func (s *CacherTestSuite) TestCacheWithNilPointerReturned() {
 	}
 
 	// First call
-	product1, err1 := Cache(1, nilGetter)
+	product1, err1 := Get(1, nilGetter)
 	s.NoError(err1)
 	s.Nil(product1, "Should be able to cache nil")
 	s.Equal(int32(1), s.callCount.Load())
 
 	// Second call - should return nil from cache
-	product2, err2 := Cache(1, nilGetter)
+	product2, err2 := Get(1, nilGetter)
 	s.NoError(err2)
 	s.Nil(product2, "Should return nil from cache")
 	s.Equal(int32(1), s.callCount.Load(), "Should not call again")
@@ -300,7 +300,7 @@ func (s *CacherTestSuite) TestCacheCorruption() {
 		return "correct value", nil
 	}
 
-	result1, err1 := Cache(1, getter)
+	result1, err1 := Get(1, getter)
 	s.NoError(err1)
 	s.Equal("correct value", result1)
 
@@ -313,7 +313,7 @@ func (s *CacherTestSuite) TestCacheCorruption() {
 	cacheStore.mu.Unlock()
 
 	// Try to retrieve - should detect corruption
-	result2, err2 := Cache(1, getter)
+	result2, err2 := Get(1, getter)
 	s.Error(err2)
 	s.Contains(err2.Error(), "cache corruption")
 	s.Equal("", result2) // Zero value of string
@@ -334,7 +334,7 @@ func (s *CacherTestSuite) TestConcurrentReadsAndWrites() {
 			defer wg.Done()
 			// Mix of reads of existing and new keys
 			key := id % 10 // Only 10 different keys
-			result, err := Cache(key, getter)
+			result, err := Get(key, getter)
 			s.NoError(err)
 			s.Contains(result, "value-")
 		}(i)
@@ -344,7 +344,7 @@ func (s *CacherTestSuite) TestConcurrentReadsAndWrites() {
 
 	// Verify that values are correctly cached
 	for i := 0; i < 10; i++ {
-		result, err := Cache(i, getter)
+		result, err := Get(i, getter)
 		s.NoError(err)
 		s.Equal(fmt.Sprintf("value-%d", i), result)
 	}
@@ -366,7 +366,7 @@ func (s *CacherTestSuite) TestConcurrentSameKey() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result, err := Cache(1, getter)
+			result, err := Get(1, getter)
 			s.NoError(err)
 			s.Equal("value", result)
 		}()
@@ -396,7 +396,7 @@ func (s *CacherTestSuite) TestSingleflightMultipleKeys() {
 			wg.Add(1)
 			go func(k int) {
 				defer wg.Done()
-				result, err := Cache(k, getter)
+				result, err := Get(k, getter)
 				s.NoError(err)
 				s.Equal(fmt.Sprintf("value-%d", k), result)
 			}(key)

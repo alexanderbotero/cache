@@ -19,7 +19,7 @@ var cacheStore = &store{
 	data: make(map[reflect.Type]map[any]any),
 }
 
-// Cache retrieves a value from cache or computes it using getterFunc.
+// Get retrieves a value from cache or computes it using getterFunc.
 // It is thread-safe and handles concurrent access correctly.
 // Errors from getterFunc are not cached, allowing retries.
 //
@@ -27,7 +27,7 @@ var cacheStore = &store{
 //   - getterFunc is nil
 //   - getterFunc returns an error
 //   - cache corruption is detected
-func Cache[K comparable, V any](key K, getterFunc func(K) (V, error)) (V, error) {
+func Get[K comparable, V any](key K, getterFunc func(K) (V, error)) (V, error) {
 	var zero V
 	if getterFunc == nil {
 		return zero, errors.New("getterFunc cannot be nil")

@@ -35,7 +35,7 @@ import (
 
 func main() {
     // Cache a simple value
-    result, err := cache.Cache(1, func(id int) (string, error) {
+    result, err := cache.Get(1, func(id int) (string, error) {
         // This function is only called once per unique key
         return fmt.Sprintf("user-%d", id), nil
     })
@@ -45,7 +45,7 @@ func main() {
     fmt.Println(result) // Output: user-1
     
     // Subsequent calls return the cached value instantly
-    result2, _ := cache.Cache(1, func(id int) (string, error) {
+    result2, _ := cache.Get(1, func(id int) (string, error) {
         return "this won't be called", nil
     })
     fmt.Println(result2) // Output: user-1
@@ -58,12 +58,12 @@ func main() {
 
 ```go
 // Cache database queries
-user, err := cache.Cache(userID, func(id int) (*User, error) {
+user, err := cache.Get(userID, func(id int) (*User, error) {
     return db.GetUser(id)
 })
 
 // Cache API calls
-data, err := cache.Cache("api-key", func(key string) ([]byte, error) {
+data, err := cache.Get("api-key", func(key string) ([]byte, error) {
     return http.Get("https://api.example.com/data")
 })
 ```
@@ -72,12 +72,12 @@ data, err := cache.Cache("api-key", func(key string) ([]byte, error) {
 
 ```go
 // String cache
-str, _ := cache.Cache(1, func(k int) (string, error) {
+str, _ := cache.Get(1, func(k int) (string, error) {
     return "hello", nil
 })
 
 // Int cache with same key - completely separate!
-num, _ := cache.Cache(1, func(k int) (int, error) {
+num, _ := cache.Get(1, func(k int) (int, error) {
     return 42, nil
 })
 ```
@@ -86,7 +86,7 @@ num, _ := cache.Cache(1, func(k int) (int, error) {
 
 ```go
 // Errors are NOT cached - retries are allowed
-result, err := cache.Cache("key", func(k string) (string, error) {
+result, err := cache.Get("key", func(k string) (string, error) {
     if networkIsDown() {
         return "", errors.New("network error") // Not cached
     }
@@ -98,19 +98,19 @@ result, err := cache.Cache("key", func(k string) (string, error) {
 
 ```go
 // Works with pointers
-user, err := cache.Cache(1, func(id int) (*User, error) {
+user, err := cache.Get(1, func(id int) (*User, error) {
     return &User{ID: id, Name: "Alice"}, nil
 })
 
 // Works with interfaces
-reader, err := cache.Cache("file.txt", func(path string) (io.Reader, error) {
+reader, err := cache.Get("file.txt", func(path string) (io.Reader, error) {
     return os.Open(path)
 })
 ```
 
 ## How It Works
 
-1. **Type Partitioning**: The cache automatically separates data by type using `reflect.Type` as a key. This means `Cache[int, string]` and `Cache[int, int]` maintain separate cache spaces.
+1. **Type Partitioning**: The cache automatically separates data by type using `reflect.Type` as a key. This means `Get[int, string]` and `Get[int, int]` maintain separate cache spaces.
 
 2. **Thread Safety**: Uses `sync.RWMutex` for efficient concurrent access:
    - Multiple goroutines can read simultaneously
@@ -124,7 +124,7 @@ reader, err := cache.Cache("file.txt", func(path string) (io.Reader, error) {
 ### Cache
 
 ```go
-func Cache[K comparable, V any](key K, getterFunc func(K) (V, error)) (V, error)
+func Get[K comparable, V any](key K, getterFunc func(K) (V, error)) (V, error)
 ```
 
 Retrieves a value from cache or computes it using `getterFunc`.
