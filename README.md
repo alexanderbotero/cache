@@ -61,11 +61,6 @@ func main() {
 user, err := cache.Get(userID, func(id int) (*User, error) {
     return db.GetUser(id)
 })
-
-// Cache API calls
-data, err := cache.Get("api-key", func(key string) ([]byte, error) {
-    return http.Get("https://api.example.com/data")
-})
 ```
 
 ### Different Types, Separate Caches
