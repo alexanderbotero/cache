@@ -355,7 +355,7 @@ func (s *CacherTestSuite) TestConcurrentSameKey() {
 	callCount := atomic.Int32{}
 	getter := func(key int) (string, error) {
 		callCount.Add(1)
-		time.Sleep(10 * time.Millisecond) // Simulate slow operation
+		time.Sleep(50 * time.Millisecond) // Simulate slow operation
 		return "value", nil
 	}
 
@@ -374,8 +374,38 @@ func (s *CacherTestSuite) TestConcurrentSameKey() {
 
 	wg.Wait()
 
-	// Will be called multiple times because there's no singleflight
-	// but all should complete without error
-	s.Greater(callCount.Load(), int32(0), "Getter should have been called at least once")
-	s.LessOrEqual(callCount.Load(), int32(50), "Should not exceed the number of goroutines")
+	// With singleflight, the getter should be called exactly once
+	s.Equal(int32(1), callCount.Load(),
+		"With singleflight, getter should be called exactly once for concurrent requests")
+}
+
+// TestSingleflightMultipleKeys verifies that different keys don't block each other
+func (s *CacherTestSuite) TestSingleflightMultipleKeys() {
+	callCount := atomic.Int32{}
+	getter := func(key int) (string, error) {
+		callCount.Add(1)
+		time.Sleep(10 * time.Millisecond)
+		return fmt.Sprintf("value-%d", key), nil
+	}
+
+	var wg sync.WaitGroup
+
+	// 10 goroutines per key (total 30 goroutines for 3 keys)
+	for key := 1; key <= 3; key++ {
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func(k int) {
+				defer wg.Done()
+				result, err := Cache(k, getter)
+				s.NoError(err)
+				s.Equal(fmt.Sprintf("value-%d", k), result)
+			}(key)
+		}
+	}
+
+	wg.Wait()
+
+	// Should be called exactly 3 times (once per unique key)
+	s.Equal(int32(3), callCount.Load(),
+		"Should be called once per unique key, even with multiple concurrent requests per key")
 }

@@ -2,13 +2,17 @@ package cache
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type store struct {
-	data map[reflect.Type]map[any]any
-	mu   sync.RWMutex
+	data  map[reflect.Type]map[any]any
+	mu    sync.RWMutex
+	group singleflight.Group
 }
 
 var cacheStore = &store{
@@ -30,11 +34,12 @@ func Cache[K comparable, V any](key K, getterFunc func(K) (V, error)) (V, error)
 	}
 	// Get type safely
 	valueType := getTypeOf(zero)
-	// If there's a cached value, return it
+
+	// Fast path: check if already cached
 	cacheStore.mu.RLock()
 	storedValue, keyExists := cacheStore.data[valueType][key]
 	if keyExists {
-		cacheStore.mu.RUnlock() // Release lock before processing
+		cacheStore.mu.RUnlock()
 		// Safe type assertion
 		if typedValue, ok := storedValue.(V); ok {
 			return typedValue, nil
@@ -42,29 +47,47 @@ func Cache[K comparable, V any](key K, getterFunc func(K) (V, error)) (V, error)
 		// This case indicates cache corruption (internal bug)
 		return zero, errors.New("cache corruption: stored value type mismatch")
 	}
-	cacheStore.mu.RUnlock() // Release lock if we didn't find the value
+	cacheStore.mu.RUnlock()
+
 	// Ensure the type exists
 	ensureType(valueType)
-	uncached, err := getterFunc(key)
+
+	// Create a unique singleflight key that combines type + key
+	// This ensures that different types don't collide
+	sfKey := fmt.Sprintf("%v:%v", valueType, key)
+
+	// Use singleflight to deduplicate concurrent calls
+	result, err, _ := cacheStore.group.Do(sfKey, func() (any, error) {
+		// Double-check: another goroutine might have cached while we were waiting
+		cacheStore.mu.RLock()
+		if storedValue, exists := cacheStore.data[valueType][key]; exists {
+			cacheStore.mu.RUnlock()
+			return storedValue, nil
+		}
+		cacheStore.mu.RUnlock()
+
+		// Execute the getter (only ONE goroutine reaches here)
+		uncached, err := getterFunc(key)
+		if err != nil {
+			return nil, fmt.Errorf("cache getter failed for key %v: %w", key, err)
+		}
+
+		// Cache the result
+		cacheStore.mu.Lock()
+		typeMapLocked := cacheStore.data[valueType]
+		typeMapLocked[key] = uncached
+		cacheStore.mu.Unlock()
+
+		return uncached, nil
+	})
+
 	if err != nil {
 		return zero, err
 	}
-	cacheStore.mu.Lock()
-	defer cacheStore.mu.Unlock()
 
-	// Double-check: another goroutine might have cached the value while we were calling getterFunc
-	typeMapLocked := cacheStore.data[valueType] // ensureType() guarantees this exists
-	cachedValue, found := typeMapLocked[key]
-	if !found {
-		// Key not cached yet, cache our value
-		typeMapLocked[key] = uncached
-		return uncached, nil
-	}
-
-	// Type assertion on the value that was cached by another goroutine
-	typedValue, ok := cachedValue.(V)
+	// Final type assertion
+	typedValue, ok := result.(V)
 	if !ok {
-		// Corruption case (should never happen)
 		return zero, errors.New("cache corruption: stored value type mismatch")
 	}
 
